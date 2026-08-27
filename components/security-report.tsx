@@ -1,9 +1,25 @@
-import { ShieldAlert, ShieldCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Ban,
+  Bot,
+  Cloud,
+  Globe,
+  House,
+  Lock,
+  Radar,
+  RadioTower,
+  Server,
+  ShieldAlert,
+  ShieldCheck,
+  Skull,
+  VenetianMask,
+} from "lucide-react";
 
-import { DetailCard } from "@/components/detail-card";
 import type { SecurityData } from "@/lib/security-types";
 
 type Tone = "danger" | "warn" | "clean";
+type SignalState = "dangerActive" | "warnActive" | "inactive";
+type MetaRow = { label: string; value: string };
 
 type SecurityReportProps = {
   data: SecurityData;
@@ -27,12 +43,23 @@ const METER_TONE: Record<Tone, string> = {
   clean: "bg-emerald-500",
 };
 
-const PILL_ACTIVE_TONE: Record<Exclude<Tone, "clean">, string> = {
-  danger: "border-red-200 bg-red-50 text-red-700",
-  warn: "border-amber-200 bg-amber-50 text-amber-700",
+const SIGNAL_CARD_TONE: Record<SignalState, string> = {
+  dangerActive: "border-red-200",
+  warnActive: "border-amber-200",
+  inactive: "border-slate-200",
 };
 
-const PILL_INACTIVE = "border-slate-200 bg-slate-50 text-slate-500";
+const SIGNAL_ICON_TONE: Record<SignalState, string> = {
+  dangerActive: "bg-red-50 text-red-600",
+  warnActive: "bg-amber-50 text-amber-600",
+  inactive: "bg-slate-100 text-slate-400",
+};
+
+const SIGNAL_STATUS: Record<SignalState, { text: string; dot: string; label: string }> = {
+  dangerActive: { text: "text-red-700", dot: "bg-red-500", label: "Detected" },
+  warnActive: { text: "text-amber-700", dot: "bg-amber-500", label: "Detected" },
+  inactive: { text: "text-slate-400", dot: "bg-slate-300", label: "Clear" },
+};
 
 export function SecurityReport({ data }: SecurityReportProps) {
   const detected = [
@@ -62,31 +89,86 @@ export function SecurityReport({ data }: SecurityReportProps) {
 
   const signals: Array<{
     label: string;
+    description: string;
     active: boolean;
     tone: Exclude<Tone, "clean">;
-    detail?: string;
+    icon: LucideIcon;
+    meta?: MetaRow[];
   }> = [
-    { label: "VPN", active: data.isVpn, tone: "danger", detail: providerDetail(data.vpnProviderNames, data.vpnConfidenceScore) },
-    { label: "Proxy", active: data.isProxy, tone: "danger", detail: providerDetail(data.proxyProviderNames, data.proxyConfidenceScore) },
-    { label: "Residential Proxy", active: data.isResidentialProxy, tone: "danger" },
-    { label: "Tor Exit Node", active: data.isTor, tone: "danger" },
-    { label: "Relay", active: data.isRelay, tone: "warn", detail: emptyToUndefined(data.relayProviderName) },
-    { label: "Anonymous", active: data.isAnonymous, tone: "warn" },
-    { label: "Known Attacker", active: data.isKnownAttacker, tone: "danger" },
-    { label: "Bot", active: data.isBot, tone: "warn" },
-    { label: "Spam", active: data.isSpam, tone: "danger" },
-    { label: "Cloud / Hosting", active: data.isCloudProvider, tone: "warn", detail: emptyToUndefined(data.cloudProviderName) },
-  ];
-
-  const details = [
-    { label: "Threat Score", value: `${data.threatScore} / 100` },
-    { label: "VPN Provider", value: listOrDash(data.vpnProviderNames) },
-    { label: "VPN Confidence", value: data.isVpn ? `${data.vpnConfidenceScore}%` : "—" },
-    { label: "Proxy Provider", value: listOrDash(data.proxyProviderNames) },
-    { label: "Proxy Confidence", value: data.isProxy ? `${data.proxyConfidenceScore}%` : "—" },
-    { label: "Cloud / Hosting Provider", value: dash(data.cloudProviderName) },
-    { label: "Relay Provider", value: dash(data.relayProviderName) },
-    { label: "Last Seen", value: dash(data.vpnLastSeen || data.proxyLastSeen) },
+    {
+      label: "VPN",
+      description: "Commercial VPN endpoint",
+      active: data.isVpn,
+      tone: "danger",
+      icon: Lock,
+      meta: providerMeta(data.vpnProviderNames, data.vpnConfidenceScore, data.vpnLastSeen),
+    },
+    {
+      label: "Proxy",
+      description: "Anonymizing or open proxy",
+      active: data.isProxy,
+      tone: "danger",
+      icon: Server,
+      meta: providerMeta(data.proxyProviderNames, data.proxyConfidenceScore, data.proxyLastSeen),
+    },
+    {
+      label: "Residential Proxy",
+      description: "Proxy routed through residential IPs",
+      active: data.isResidentialProxy,
+      tone: "danger",
+      icon: House,
+    },
+    {
+      label: "Tor Exit Node",
+      description: "Exit node on the Tor network",
+      active: data.isTor,
+      tone: "danger",
+      icon: Globe,
+    },
+    {
+      label: "Relay",
+      description: "Private relay (e.g. iCloud Private Relay)",
+      active: data.isRelay,
+      tone: "warn",
+      icon: RadioTower,
+      meta: [{ label: "Provider", value: data.relayProviderName || "Not disclosed" }],
+    },
+    {
+      label: "Anonymous",
+      description: "General anonymization signal",
+      active: data.isAnonymous,
+      tone: "warn",
+      icon: VenetianMask,
+    },
+    {
+      label: "Known Attacker",
+      description: "Seen in recent attack activity",
+      active: data.isKnownAttacker,
+      tone: "danger",
+      icon: Skull,
+    },
+    {
+      label: "Bot",
+      description: "Automated or bot traffic",
+      active: data.isBot,
+      tone: "warn",
+      icon: Bot,
+    },
+    {
+      label: "Spam",
+      description: "Seen in spam activity",
+      active: data.isSpam,
+      tone: "danger",
+      icon: Ban,
+    },
+    {
+      label: "Cloud / Hosting",
+      description: "Datacenter or hosting IP",
+      active: data.isCloudProvider,
+      tone: "warn",
+      icon: Cloud,
+      meta: [{ label: "Provider", value: data.cloudProviderName || "Not disclosed" }],
+    },
   ];
 
   return (
@@ -133,45 +215,78 @@ export function SecurityReport({ data }: SecurityReportProps) {
       </section>
 
       <section aria-labelledby="signals-heading">
-        <h2 id="signals-heading" className="mb-4 text-lg font-semibold text-slate-950">
-          Detection signals
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {signals.map((signal) => (
-            <div
-              key={signal.label}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-slate-700">{signal.label}</span>
-                <span
-                  className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                    signal.active ? PILL_ACTIVE_TONE[signal.tone] : PILL_INACTIVE
-                  }`}
-                >
-                  {signal.active ? "Yes" : "No"}
-                </span>
-              </div>
-              {signal.active && signal.detail ? (
-                <p className="mt-2 break-words text-xs text-slate-500">{signal.detail}</p>
-              ) : null}
-            </div>
-          ))}
+        <div className="mb-4 flex items-center gap-2">
+          <Radar className="h-5 w-5 text-slate-400" />
+          <h2 id="signals-heading" className="text-lg font-semibold text-slate-950">
+            Detection signals
+          </h2>
         </div>
-      </section>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {signals.map((signal) => {
+            const state: SignalState = signal.active
+              ? signal.tone === "danger"
+                ? "dangerActive"
+                : "warnActive"
+              : "inactive";
+            const status = SIGNAL_STATUS[state];
+            const Icon = signal.icon;
+            const meta = signal.active ? signal.meta : undefined;
 
-      <section aria-labelledby="details-heading">
-        <h2 id="details-heading" className="mb-4 text-lg font-semibold text-slate-950">
-          Details
-        </h2>
-        <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {details.map((detail) => (
-            <DetailCard key={detail.label} label={detail.label} value={detail.value} />
-          ))}
-        </dl>
+            return (
+              <div
+                key={signal.label}
+                className={`flex h-full flex-col rounded-2xl border bg-white p-4 shadow-sm ${SIGNAL_CARD_TONE[state]}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span
+                    className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${SIGNAL_ICON_TONE[state]}`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold ${status.text}`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
+                    {status.label}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-slate-900">{signal.label}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{signal.description}</p>
+                {meta && meta.length > 0 ? (
+                  <dl className="mt-4 space-y-1.5 border-t border-slate-100 pt-3">
+                    {meta.map((row) => (
+                      <div
+                        key={row.label}
+                        className="flex items-start justify-between gap-3 text-xs"
+                      >
+                        <dt className="shrink-0 text-slate-500">{row.label}</dt>
+                        <dd className="break-words text-right font-medium text-slate-700">
+                          {row.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       </section>
     </div>
   );
+}
+
+function providerMeta(names: string[], confidence: number, lastSeen: string): MetaRow[] {
+  const rows: MetaRow[] = [
+    { label: "Provider", value: names.length > 0 ? names.join(", ") : "Not disclosed" },
+    { label: "Confidence", value: `${confidence}%` },
+  ];
+
+  if (lastSeen.trim()) {
+    rows.push({ label: "Last seen", value: lastSeen });
+  }
+
+  return rows;
 }
 
 function threatBand(score: number): { label: string; tone: Tone } {
@@ -210,32 +325,6 @@ function overallTone(data: SecurityData, threatTone: Tone): Tone {
   }
 
   return "clean";
-}
-
-function providerDetail(names: string[], confidence: number): string | undefined {
-  const parts: string[] = [];
-
-  if (names.length > 0) {
-    parts.push(names.join(", "));
-  }
-
-  if (confidence > 0) {
-    parts.push(`${confidence}% confidence`);
-  }
-
-  return parts.length > 0 ? parts.join(" · ") : undefined;
-}
-
-function listOrDash(values: string[]) {
-  return values.length > 0 ? values.join(", ") : "—";
-}
-
-function dash(value: string) {
-  return value.trim() ? value : "—";
-}
-
-function emptyToUndefined(value: string) {
-  return value.trim() ? value : undefined;
 }
 
 function clampPercent(value: number) {
